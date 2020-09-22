@@ -7,8 +7,8 @@ const pixivImg = require('pixiv-img');
 
 const pixiv = new PixivApi();
 const appPixiv = new PixivAppApi();
-let id;
 const tags = config.get('tags');
+let id;
 
 const checkPath = (path) => {
     let newPath = path;
@@ -23,15 +23,16 @@ const checkPath = (path) => {
 }
 
 const novelBackup = async (tag, doSearch) => {
-    let novels;
     try {
+        let res;
         if (doSearch) {
-            novels = (await appPixiv.searchNovel(tag)).novels;
+            res = await appPixiv.searchNovel(tag);
         }
         else {
-            novels = (await appPixiv.next()).novels;
+            res = await appPixiv.next();
         }
-
+        const novels = res.novels;
+        console.log(res)
         for (let i = 0; i < novels.length; ++i) {
             const novel = novels[i];
             if (novel.isBookmarked) {
@@ -53,10 +54,11 @@ const novelBackup = async (tag, doSearch) => {
                 }
             }
         }
-        if (novels && novels.length !== 0) {
-            const create_date_last = moment(novels[novels.length - 1].createDate).format('YYYY-MM-DD');
-            return create_date_last;
+        if (!res.nextUrl) {
+            return 'done';
         }
+        const create_date_last = moment(novels[novels.length - 1].createDate).format('YYYY-MM-DD');
+        return create_date_last;
     }
     catch (e) {
         if (e.response) {
@@ -70,14 +72,15 @@ const novelBackup = async (tag, doSearch) => {
 }
 
 const illustBackup = async (doSearch) => {
-    let illusts, upToDate = false;
     try {
+        let res, upToDate = false;
         if (doSearch) {
-            illusts = (await appPixiv.userBookmarksIllust(id)).illusts;
+            res = await appPixiv.userBookmarksIllust(id);
         }
         else {
-            illusts = (await appPixiv.next()).illusts;
+            res = await appPixiv.next();
         }
+        let illusts = res.illusts;
 
         for (let i = 0; i < illusts.length; ++i) {
             const illust = illusts[i];
@@ -128,7 +131,7 @@ const illustBackup = async (doSearch) => {
                 }
             }
         }
-        if (upToDate) {
+        if (upToDate || !res.nextUrl) {
             return 'done';
         }
     }
@@ -175,14 +178,13 @@ const app = async () => {
         }
     });
 
-    let novelDate;
     let tagIndex = 0;
     let doSearch = true;
     if (doNovelBackup) {
         const novelInterval = setInterval(async () => {
-            novelDate = await novelBackup(tags[tagIndex], doSearch);
+            const res = await novelBackup(tags[tagIndex], doSearch);
             doSearch = false;
-            if (novelDate === 'done' || moment(novelDate).isBefore(lastBackup)) {
+            if (res === 'done' || moment(res).isBefore(lastBackup)) {
                 ++tagIndex;
                 doSearch = true;
                 if (tagIndex >= tags.length) {
