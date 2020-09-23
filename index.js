@@ -7,9 +7,8 @@ const pixivImg = require('pixiv-img');
 
 const pixiv = new PixivApi();
 const appPixiv = new PixivAppApi();
-const tags = config.get('tags');
 const scanAll = config.get('scanAll');
-let id;
+let id, tags;
 
 const checkPath = (path) => {
     let newPath = path;
@@ -21,6 +20,30 @@ const checkPath = (path) => {
     newPath = newPath.replace(/\?/g, '？');
     newPath = newPath.replace(/\*/g, '＊');
     return newPath;
+}
+
+const autoClassify = async () => {
+    let res = await appPixiv.userBookmarksIllust(id);
+    let obj = {};
+    while (true) {
+        res.illusts.forEach(illust => {
+            illust.tags.forEach(tag => {
+                if (obj[tag.name]) {
+                    ++obj[tag.name];
+                }
+                else {
+                    obj[tag.name] = 1;
+                }
+            });
+        });
+        if (!res.nextUrl) {
+            break;
+        }
+        res = await appPixiv.next();
+    }
+    const tags = Object.keys(obj);
+    tags.sort((a, b) => obj[b] - obj[a]);
+    return tags;
 }
 
 const novelBackup = async (tag, doSearch) => {
@@ -55,7 +78,7 @@ const novelBackup = async (tag, doSearch) => {
         return lastCreateDate;
     }
     catch (e) {
-        if (e.response && e.response.status === 403) {
+        if (e.response && (e.response.status === 403 || e.response.status === 400)) {
             console.log("Take a break!");
             return;
         }
@@ -78,9 +101,13 @@ const illustBackup = async (doSearch) => {
         for (let i = 0; i < illusts.length; ++i) {
             const illust = illusts[i];
             const tag = tags.find(a => illust.tags.findIndex(b => b.name.includes(a)) > -1);
+            const tagDir = tag ? `./illusts/${tag.replace(/\//g, '／')}` : `./illusts`;
+            if (!fs.existsSync(tagDir)) {
+                fs.mkdirSync(tagDir);
+            }
             if (illust.title) {
                 if (illust.metaPages.length !== 0) {
-                    let dir = `./illusts${tag ? `/${tag}` : ''}/${illust.id}-${illust.title.replace(/\//g, '／')}`;
+                    let dir = `${tagDir}/${illust.id}-${illust.title.replace(/\//g, '／')}`;
                     dir = checkPath(dir);
                     if (!fs.existsSync(dir)) {
                         fs.mkdirSync(dir);
@@ -101,7 +128,7 @@ const illustBackup = async (doSearch) => {
                 else {
                     const url = illust.metaSinglePage.originalImageUrl;
                     const arr = url.split('\.');
-                    let path = `./illusts${tag ? `/${tag}` : ''}/${illust.id}-${illust.title.replace(/\//g, '／')}.${arr[arr.length - 1]}`;
+                    let path = `${tagDir}/${illust.id}-${illust.title.replace(/\//g, '／')}.${arr[arr.length - 1]}`;
                     path = checkPath(path);
                     if (!fs.existsSync(path)) {
                         await pixivImg(url, path);
@@ -119,7 +146,7 @@ const illustBackup = async (doSearch) => {
         }
     }
     catch (e) {
-        if (e.response && e.response.status === 403) {
+        if (e.response && (e.response.status === 403 || e.response.status === 400)) {
             console.log("Take a break!");
             return;
         }
@@ -131,6 +158,7 @@ const illustBackup = async (doSearch) => {
 const app = async () => {
     const username = config.get('account');
     const password = config.get('password');
+    const userTags = config.get('tags');
     const lastBackup = config.get('lastBackup');
     const novelCycle = config.get('novelCycle');
     const doNovelBackup = config.get('doNovelBackup');
@@ -148,16 +176,22 @@ const app = async () => {
     if (!fs.existsSync('./illusts')) {
         fs.mkdirSync('./illusts');
     }
-    tags.forEach(tag => {
+    userTags.forEach(tag => {
         if (!fs.existsSync(`./novels/${tag}`)) {
             fs.mkdirSync(`./novels/${tag}`);
         }
     });
-    tags.forEach(tag => {
+    userTags.forEach(tag => {
         if (!fs.existsSync(`./illusts/${tag}`)) {
             fs.mkdirSync(`./illusts/${tag}`);
         }
     });
+    const autoTags = await autoClassify();
+    const unnecessaryTags = config.get('unnecessaryTags');
+    const unnecessaryWords = ["users入り", "なにこれ", "目から", "あなたが", "腐", "これはいい", "かわいい", "素敵"];
+    tags = userTags.concat(autoTags).filter(item => unnecessaryTags.indexOf(item) === -1).filter(item => unnecessaryWords.every(word => !item.includes(word)));
+    tags = tags.filter((item, i) => tags.indexOf(item) === i);
+    console.log(tags);
 
     let tagIndex = 0;
     let doSearch = true;
