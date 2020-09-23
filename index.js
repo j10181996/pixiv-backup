@@ -139,7 +139,7 @@ const app = async () => {
         await pixiv.login(username, password);
     }
     catch (e) {
-        console.log("login failed");
+        console.log("Login Failed!");
     }
 
     if (!fs.existsSync('./novels')) {
@@ -185,6 +185,7 @@ const app = async () => {
                         doSearch = false;
                         if (res === 'done') {
                             console.log('Done Illust Backup!');
+                            break;
                         }
                     }
                 }
@@ -197,6 +198,7 @@ const app = async () => {
             doSearch = false;
             if (res === 'done') {
                 console.log('Done Illust Backup!');
+                break;
             }
         }
     }
