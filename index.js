@@ -8,6 +8,7 @@ const pixivImg = require('pixiv-img');
 const pixiv = new PixivApi();
 const appPixiv = new PixivAppApi();
 const tags = config.get('tags');
+const scanAll = config.get('scanAll');
 let id;
 
 const checkPath = (path) => {
@@ -32,22 +33,15 @@ const novelBackup = async (tag, doSearch) => {
             res = await appPixiv.next();
         }
         const novels = res.novels;
-        console.log(res)
         for (let i = 0; i < novels.length; ++i) {
             const novel = novels[i];
             if (novel.isBookmarked) {
                 let path = `./novels/${tag}/${novel.id}-${novel.title.replace(/\//g, '／')}.txt`;
                 path = checkPath(path);
                 if (!fs.existsSync(path)) {
-                    pixiv.novelText(novel.id).then(res => {
-                        try {
-                            fs.writeFileSync(path, res.novel_text.replace(/\n/g, '\n　　'));
-                            console.log(path);
-                        }
-                        catch (e) {
-                            console.log(e);
-                        }
-                    }).catch(e => console.log(e));
+                    const res = await pixiv.novelText(novel.id);
+                    fs.writeFileSync(path, res.novel_text.replace(/\n/g, '\n　　'));
+                    console.log(path);
                 }
                 else {
                     continue;
@@ -57,14 +51,13 @@ const novelBackup = async (tag, doSearch) => {
         if (!res.nextUrl) {
             return 'done';
         }
-        const create_date_last = moment(novels[novels.length - 1].createDate).format('YYYY-MM-DD');
-        return create_date_last;
+        const lastCreateDate = moment(novels[novels.length - 1].createDate).format('YYYY-MM-DD');
+        return lastCreateDate;
     }
     catch (e) {
-        if (e.response) {
-            if (e.response.status === 403) {
-                return 'done';
-            }
+        if (e.response.status === 403) {
+            console.log("Take a break!");
+            return;
         }
         console.log(e);
         fs.appendFile('./log.txt', `${e}\n`, (e) => console.log(e));
@@ -102,12 +95,7 @@ const illustBackup = async (doSearch) => {
                         const url = img.imageUrls.original;
                         const arr = url.split('\.');
                         const path = `${dir}/p${j}.${arr[arr.length - 1]}`;
-                        try {
-                            pixivImg(url, path);
-                        }
-                        catch (e) {
-                            console.log(e);
-                        }
+                        await pixivImg(url, path);
                     }
                 }
                 else {
@@ -116,13 +104,8 @@ const illustBackup = async (doSearch) => {
                     let path = `./illusts${tag ? `/${tag.name}` : ''}/${illust.id}-${illust.title.replace(/\//g, '／')}.${arr[arr.length - 1]}`;
                     path = checkPath(path);
                     if (!fs.existsSync(path)) {
-                        try {
-                            pixivImg(url, path);
-                            console.log(path);
-                        }
-                        catch (e) {
-                            console.log(e);
-                        }
+                        await pixivImg(url, path);
+                        console.log(path);
                     }
                     else {
                         upToDate = true;
@@ -131,15 +114,14 @@ const illustBackup = async (doSearch) => {
                 }
             }
         }
-        if (upToDate || !res.nextUrl) {
+        if ((upToDate && !scanAll) || !res.nextUrl) {
             return 'done';
         }
     }
     catch (e) {
-        if (e.response) {
-            if (e.response.status === 403) {
-                return 'done';
-            }
+        if (e.response.status === 403) {
+            console.log("Take a break!");
+            return;
         }
         console.log(e);
         fs.appendFile('./log.txt', `${e}\n`, (e) => console.log(e));
@@ -151,7 +133,6 @@ const app = async () => {
     const password = config.get('password');
     const lastBackup = config.get('lastBackup');
     const novelCycle = config.get('novelCycle');
-    const illustCycle = config.get('illustCycle');
     const doNovelBackup = config.get('doNovelBackup');
     try {
         id = (await appPixiv.login(username, password)).user.id;
@@ -180,14 +161,14 @@ const app = async () => {
 
     let tagIndex = 0;
     let doSearch = true;
-    if (doNovelBackup) {
+    if (doNovelBackup && tags.length > 0) {
         const novelInterval = setInterval(async () => {
             const res = await novelBackup(tags[tagIndex], doSearch);
             doSearch = false;
-            if (res === 'done' || moment(res).isBefore(lastBackup)) {
+            if (res === 'done' || (!scanAll && moment(res).isBefore(lastBackup))) {
                 ++tagIndex;
                 doSearch = true;
-                if (tagIndex >= tags.length) {
+                if (tagIndex === tags.length) {
                     console.log('Done Novel Backup!');
                     clearInterval(novelInterval);
                     try {
@@ -199,28 +180,25 @@ const app = async () => {
                     catch (e) {
                         console.log(e);
                     }
-
-                    const illustInterval = setInterval(async () => {
+                    while (true) {
                         const res = await illustBackup(doSearch);
                         doSearch = false;
                         if (res === 'done') {
                             console.log('Done Illust Backup!');
-                            clearInterval(illustInterval);
                         }
-                    }, illustCycle);
+                    }
                 }
             }
         }, novelCycle);
     }
     else {
-        const illustInterval = setInterval(async () => {
+        while (true) {
             const res = await illustBackup(doSearch);
             doSearch = false;
             if (res === 'done') {
                 console.log('Done Illust Backup!');
-                clearInterval(illustInterval);
             }
-        }, illustCycle);
+        }
     }
 }
 

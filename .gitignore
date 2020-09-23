@@ -107,3 +107,6 @@ package-lock.json
 illusts/
 novels/
 log.txt
+index-win.exe
+index-macos
+index-linux
