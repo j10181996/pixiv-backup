@@ -55,7 +55,7 @@ const novelBackup = async (tag, doSearch) => {
         return lastCreateDate;
     }
     catch (e) {
-        if (e.response.status === 403) {
+        if (e.response && e.response.status === 403) {
             console.log("Take a break!");
             return;
         }
@@ -77,10 +77,10 @@ const illustBackup = async (doSearch) => {
 
         for (let i = 0; i < illusts.length; ++i) {
             const illust = illusts[i];
-            const tag = illust.tags.find(item => tags.indexOf(item.name) > -1);
+            const tag = tags.find(a => illust.tags.findIndex(b => b.name.includes(a)) > -1);
             if (illust.title) {
                 if (illust.metaPages.length !== 0) {
-                    let dir = `./illusts${tag ? `/${tag.name}` : ''}/${illust.id}-${illust.title.replace(/\//g, '／')}`;
+                    let dir = `./illusts${tag ? `/${tag}` : ''}/${illust.id}-${illust.title.replace(/\//g, '／')}`;
                     dir = checkPath(dir);
                     if (!fs.existsSync(dir)) {
                         fs.mkdirSync(dir);
@@ -101,7 +101,7 @@ const illustBackup = async (doSearch) => {
                 else {
                     const url = illust.metaSinglePage.originalImageUrl;
                     const arr = url.split('\.');
-                    let path = `./illusts${tag ? `/${tag.name}` : ''}/${illust.id}-${illust.title.replace(/\//g, '／')}.${arr[arr.length - 1]}`;
+                    let path = `./illusts${tag ? `/${tag}` : ''}/${illust.id}-${illust.title.replace(/\//g, '／')}.${arr[arr.length - 1]}`;
                     path = checkPath(path);
                     if (!fs.existsSync(path)) {
                         await pixivImg(url, path);
@@ -119,7 +119,7 @@ const illustBackup = async (doSearch) => {
         }
     }
     catch (e) {
-        if (e.response.status === 403) {
+        if (e.response && e.response.status === 403) {
             console.log("Take a break!");
             return;
         }
