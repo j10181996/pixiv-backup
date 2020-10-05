@@ -195,14 +195,14 @@ const app = async () => {
 
     let tagIndex = 0;
     let doSearch = true;
-    if (doNovelBackup && tags.length > 0) {
+    if (doNovelBackup && userTags.length > 0) {
         const novelInterval = setInterval(async () => {
-            const res = await novelBackup(tags[tagIndex], doSearch);
+            const res = await novelBackup(userTags[tagIndex], doSearch);
             doSearch = false;
             if (res === 'done' || (!scanAll && moment(res).isBefore(lastBackup))) {
                 ++tagIndex;
                 doSearch = true;
-                if (tagIndex === tags.length) {
+                if (tagIndex === userTags.length) {
                     console.log('Done Novel Backup!');
                     clearInterval(novelInterval);
                     try {
